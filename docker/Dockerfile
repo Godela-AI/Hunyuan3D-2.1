@@ -57,10 +57,10 @@ RUN conda install -c conda-forge libstdcxx-ng -y
 
 RUN pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 
-# Clone Hunyuan3D-2.1 repository
-RUN git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1.git
+# Copy local code instead of cloning (we're building from our fork)
+COPY . /workspace/Hunyuan3D-2.1
 
-# Install Python dependencies from modified requirements.txt
+# Install Python dependencies
 RUN pip install -r Hunyuan3D-2.1/requirements.txt
 
 # Install custom_rasterizer
@@ -103,12 +103,21 @@ SHELL ["/bin/bash", "--login", "-c"]
 #exposing 7860 port
 EXPOSE 7860
 
+# Model weights downloaded at runtime on first request and cached in HF_HOME.
+# Mount a persistent volume at /workspace/models to avoid re-downloading.
+ENV HF_HOME=/workspace/models
+
 # Cleanup
 RUN rm -f /workspace/*.zip && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    conda clean -afy && \
+    pip cache purge
 
-# Set default command
 WORKDIR /workspace/Hunyuan3D-2.1
-RUN mkdir gradio_cache
-CMD ["python", "api_server.py"]
+RUN mkdir -p gradio_cache
+
+EXPOSE 7860
+
+# Models cached in HF_HOME, runtime loads from cache automatically
+CMD ["python", "api_server.py", "--port", "8081"]

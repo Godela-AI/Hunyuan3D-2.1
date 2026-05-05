@@ -1,0 +1,84 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ECR_REPO: godela-hunyuan3d
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/Github-Deploy-Service
+          role-session-name: hunyuan3d-build
+          aws-region: us-east-2
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift \
+            /usr/local/.ghcup /usr/local/graalvm /usr/local/share/powershell \
+            /usr/local/share/chromium /usr/local/lib/node_modules \
+            /usr/share/miniconda /usr/local/share/edge_driver \
+            /usr/local/share/gecko_driver /usr/local/share/vcpkg
+          sudo docker image prune -af
+          sudo apt-get clean
+          df -h /
+
+      - name: Login to ECR
+        run: aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 001736380602.dkr.ecr.us-east-2.amazonaws.com
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          platforms: linux/amd64
+          cache-from: type=registry,ref=001736380602.dkr.ecr.us-east-2.amazonaws.com/${{ env.ECR_REPO }}:cache
+          cache-to: type=registry,ref=001736380602.dkr.ecr.us-east-2.amazonaws.com/${{ env.ECR_REPO }}:cache,mode=max
+          tags: |
+            001736380602.dkr.ecr.us-east-2.amazonaws.com/${{ env.ECR_REPO }}:${{ github.sha }}
+            001736380602.dkr.ecr.us-east-2.amazonaws.com/${{ env.ECR_REPO }}:latest
+
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: Godela-AI
+
+      - name: Checkout Helm chart
+        uses: actions/checkout@v4
+        with:
+          repository: Godela-AI/godela-terraform
+          ref: dev
+          path: godela-terraform
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Deploy to EKS
+        run: |
+          aws eks update-kubeconfig --name godela-dev --region us-east-2
+          helm upgrade --install hunyuan3d godela-terraform/helm/solver-template \
+            -n solvers --create-namespace \
+            -f godela-terraform/helm/solver-template/values-hunyuan3d-dev.yaml \
+            --set image.tag=${{ github.sha }}
+          kubectl rollout status deployment/hunyuan3d -n solvers --timeout=900s
