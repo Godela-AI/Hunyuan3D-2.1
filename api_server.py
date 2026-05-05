@@ -206,6 +206,7 @@ if __name__ == "__main__":
     parser.add_argument('--low_vram_mode', action='store_true')
     parser.add_argument('--enable_t2i', action='store_true', help='Enable text-to-image pipeline for text-to-3D generation')
     parser.add_argument('--t2i_model', type=str, default='stabilityai/stable-diffusion-xl-base-1.0', help='Text-to-image model ID')
+    parser.add_argument('--skip_texture', action='store_true', default=True, help='Skip texture pipeline (saves 21GB VRAM)')
     parser.add_argument('--cache-path', type=str, default='./gradio_cache')
     args = parser.parse_args()
     logger.info(f"args: {args}")
@@ -227,7 +228,8 @@ if __name__ == "__main__":
         save_dir=SAVE_DIR,
         mc_algo=args.mc_algo,
         enable_flashvdm=args.enable_flashvdm,
-        compile=args.compile
+        compile=args.compile,
+        skip_texture=args.skip_texture
     )
     if args.enable_t2i:
         worker.load_t2i_pipeline(args.t2i_model)
