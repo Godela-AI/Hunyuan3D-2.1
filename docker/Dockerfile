@@ -63,30 +63,8 @@ COPY . /workspace/Hunyuan3D-2.1
 # Install Python dependencies
 RUN pip install -r Hunyuan3D-2.1/requirements.txt
 
-# Install custom_rasterizer
-RUN cd /workspace/Hunyuan3D-2.1/hy3dpaint/custom_rasterizer && \
-    # Set compilation environment variables
-    export TORCH_CUDA_ARCH_LIST="6.0;6.1;7.0;7.5;8.0;8.6;8.9;9.0" && \
-    export CUDA_NVCC_FLAGS="-allow-unsupported-compiler" && \
-    # Install with editable mode
-    pip install -e .
-
-# Install DifferentiableRenderer
-RUN cd /workspace/Hunyuan3D-2.1/hy3dpaint/DifferentiableRenderer && \
-    bash compile_mesh_painter.sh
-
-# Create ckpt folder in hy3dpaint and download RealESRGAN model
-RUN cd /workspace/Hunyuan3D-2.1/hy3dpaint && \
-    mkdir -p ckpt && \
-    wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth -P ckpt
-
-# Modify textureGenPipeline.py to update config path
-RUN cd /workspace/Hunyuan3D-2.1/hy3dpaint && \
-    sed -i 's/self\.multiview_cfg_path = "cfgs\/hunyuan-paint-pbr\.yaml"/self.multiview_cfg_path = "hy3dpaint\/cfgs\/hunyuan-paint-pbr.yaml"/' textureGenPipeline.py
-
-# Modify multiview_utils.py to update custom_pipeline path
-RUN cd /workspace/Hunyuan3D-2.1/hy3dpaint/utils && \
-    sed -i 's/custom_pipeline = config\.custom_pipeline/custom_pipeline = os.path.join(os.path.dirname(__file__),"..","hunyuanpaintpbr")/' multiview_utils.py
+# Texture pipeline (custom_rasterizer, DifferentiableRenderer, RealESRGAN) skipped
+# Shape-only mode -- no texture generation, saves build time + 21GB VRAM
 
 # Set working directory to the cloned repository
 WORKDIR /workspace/Hunyuan3D-2.1
