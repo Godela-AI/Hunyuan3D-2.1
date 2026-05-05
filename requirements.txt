@@ -52,8 +52,7 @@ psutil==6.0.0
 # GPU Computing (requires CUDA)
 cupy-cuda12x==13.4.1
 
-# Blender
-bpy==4.0
+# bpy==4.0  # Blender -- only for rendering/texture, needs Python 3.11+
 
 # ONNX Runtime
 onnxruntime==1.16.3
