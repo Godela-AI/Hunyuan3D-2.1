@@ -7,10 +7,15 @@ from pydantic import BaseModel, Field
 
 class GenerationRequest(BaseModel):
     """Request model for 3D generation API"""
-    image: str = Field(
-        ..., 
-        description="Base64 encoded input image for 3D generation",
+    image: Optional[str] = Field(
+        None,
+        description="Base64 encoded input image for 3D generation. Required if prompt is not provided.",
         example="iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGP8z4AATAxEcQAz0QEHOoQ+uAAAAABJRU5ErkJggg=="
+    )
+    prompt: Optional[str] = Field(
+        None,
+        description="Text prompt for 3D generation. Generates an image first, then creates 3D model. Required if image is not provided.",
+        example="a futuristic sports car"
     )
     remove_background: bool = Field(
         True,

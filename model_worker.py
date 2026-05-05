@@ -94,6 +94,9 @@ class ModelWorker:
 
         # Initialize background remover
         self.rembg = BackgroundRemover()
+
+        # Text-to-image pipeline (loaded lazily on first text prompt)
+        self.t2i_pipeline = None
         
         # Initialize shape generation pipeline (matching demo.py)
         self.pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(model_path)
@@ -114,6 +117,21 @@ class ModelWorker:
         # clean cache in save_dir
         for file in os.listdir(self.save_dir):
             os.remove(os.path.join(self.save_dir, file))
+
+    def load_t2i_pipeline(self, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
+        """Load text-to-image pipeline for text-to-3D generation."""
+        from diffusers import StableDiffusionXLPipeline
+        logger.info(f"Loading text-to-image pipeline: {model_id}")
+        self.t2i_pipeline = StableDiffusionXLPipeline.from_pretrained(
+            model_id, torch_dtype=torch.float16, variant="fp16",
+        ).to(self.device)
+        # Wrap to return PIL image
+        _pipe = self.t2i_pipeline
+        def generate_image(prompt):
+            result = _pipe(prompt, num_inference_steps=30, guidance_scale=7.5)
+            return result.images[0]
+        self.t2i_pipeline = generate_image
+        logger.info("Text-to-image pipeline loaded")
             
     def get_queue_length(self):
         """
@@ -154,12 +172,19 @@ class ModelWorker:
         """
         start_time = time.time()
         logger.info(f"Generating 3D model for uid: {uid}")
-        # Handle input image
-        if 'image' in params:
+        # Handle input: text prompt generates image first, then 3D
+        if 'prompt' in params and params['prompt']:
+            prompt = params['prompt']
+            logger.info(f"Text-to-3D: generating image from prompt: {prompt}")
+            if self.t2i_pipeline is None:
+                raise ValueError("Text-to-image pipeline not loaded. Start server with --enable_t2i")
+            image = self.t2i_pipeline(prompt)
+            logger.info(f"Text-to-image took {time.time() - start_time:.1f}s")
+        elif 'image' in params and params['image']:
             image = params["image"]
             image = load_image_from_base64(image)
         else:
-            raise ValueError("No input image provided")
+            raise ValueError("Either 'image' or 'prompt' must be provided")
 
         # Convert to RGBA and remove background if needed
         image = image.convert("RGBA")

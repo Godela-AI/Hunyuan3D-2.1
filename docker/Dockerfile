@@ -120,4 +120,4 @@ RUN mkdir -p gradio_cache
 EXPOSE 7860
 
 # Models cached in HF_HOME, runtime loads from cache automatically
-CMD ["python", "api_server.py", "--port", "8081"]
+CMD ["python", "api_server.py", "--port", "8081", "--enable_t2i"]
