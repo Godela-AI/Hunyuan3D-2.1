@@ -26,17 +26,10 @@ except Exception as e:
 from hy3dshape import Hunyuan3DDiTFlowMatchingPipeline
 from hy3dshape.rembg import BackgroundRemover
 from hy3dshape.utils import logger
-from textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
-from hy3dpaint.convert_utils import create_glb_with_pbr_materials
 
-
-def quick_convert_with_obj2gltf(obj_path: str, glb_path: str):
-    textures = {
-        'albedo': obj_path.replace('.obj', '.jpg'),
-        'metallic': obj_path.replace('.obj', '_metallic.jpg'),
-        'roughness': obj_path.replace('.obj', '_roughness.jpg')
-        }
-    create_glb_with_pbr_materials(obj_path, textures, glb_path)
+# textureGenPipeline and hy3dpaint.convert_utils are imported lazily
+# inside __init__ only when skip_texture=False, because they pull in bpy
+# which requires Python 3.11+ and is not installed in shape-only mode.
 
 
 def load_image_from_base64(image):
@@ -110,6 +103,7 @@ class ModelWorker:
         # Initialize texture generation pipeline (skip if not needed -- saves 21GB VRAM)
         self.skip_texture = skip_texture
         if not skip_texture:
+            from textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
             max_num_view = 6
             resolution = 512
             conf = Hunyuan3DPaintConfig(max_num_view, resolution)
@@ -222,8 +216,14 @@ class ModelWorker:
                     save_glb=False
                 )
                 logger.info("---Texture generation takes %s seconds ---" % (time.time() - start_time))
+                from hy3dpaint.convert_utils import create_glb_with_pbr_materials
                 glb_path_textured = os.path.join(self.save_dir, f'{str(uid)}_texturing.glb')
-                quick_convert_with_obj2gltf(textured_path_obj, glb_path_textured)
+                textures = {
+                    'albedo': textured_path_obj.replace('.obj', '.jpg'),
+                    'metallic': textured_path_obj.replace('.obj', '_metallic.jpg'),
+                    'roughness': textured_path_obj.replace('.obj', '_roughness.jpg'),
+                }
+                create_glb_with_pbr_materials(textured_path_obj, textures, glb_path_textured)
                 final_save_path = os.path.join(self.save_dir, f'{str(uid)}_textured.glb')
                 os.rename(glb_path_textured, final_save_path)
             except Exception as e:
